@@ -1,0 +1,190 @@
+#cloud-config
+write_files:
+  - path: "/var/tmp/server_certificate.pem"
+    permissions: "0755"
+    owner: "root:root"
+    content: !!binary |
+      "${cert_file}"
+  - path: "/var/tmp/private_certificate.pem"
+    permissions: "0755"
+    owner: "root:root"
+    content: !!binary |
+      "${key_file}"
+  - path: /var/tmp/config_vault.hcl
+    permissions: '0640'
+    content: |
+      storage "raft" {
+        path    = "/opt/vault/data"
+        node_id = "node1"
+      }
+      
+      listener "tcp" {
+        address     = "${local_ip_address}:8200"
+        tls_disable = "false"
+        tls_cert_file = "/opt/vault/server_certificate.pem"
+        tls_key_file  = "/opt/vault/private_certificate.pem"
+      }
+      
+      api_addr = "https://${dns_hostname}.${dns_zonename}:8200"
+      cluster_addr = "https://${dns_hostname}.${dns_zonename}:8201"
+      ui = true
+  - path: /var/tmp/install_software.sh 
+    permissions: '0750'
+    content: |
+      #!/usr/bin/env bash
+      # installation script for software
+      
+      # wait until archive is available. Wait until there is internet before continue
+      until ping -c1 archive.ubuntu.com &>/dev/null; do
+        echo "waiting for networking to initialise"
+        sleep 3 
+      done 
+      
+      # install monitoring tools
+      apt-get update
+      apt-get install -y ctop net-tools sysstat jq      
+
+      # add public ssh key alvaro
+      curl -sL https://raw.githubusercontent.com/kikitux/curl-bash/master/provision/add_github_user_public_keys.sh | GITHUB_USER=kikitux bash
+      
+      # add public ssh key patrick
+      curl -sL https://raw.githubusercontent.com/kikitux/curl-bash/master/provision/add_github_user_public_keys.sh | GITHUB_USER=munnep bash
+      
+      # install netdata tool
+      curl -sL https://raw.githubusercontent.com/automodule/bash/main/install_netdata.sh | bash
+      
+      # Set swappiness
+      if test -f /sys/kernel/mm/transparent_hugepage/enabled; then
+        echo never > /sys/kernel/mm/transparent_hugepage/enabled
+      fi
+      
+      if test -f /sys/kernel/mm/transparent_hugepage/defrag; then
+        echo never > /sys/kernel/mm/transparent_hugepage/defrag
+      fi
+      
+      # heavy swap vm.swappiness=80
+      # no swap vm.swappiness=1
+
+      echo vm.swappiness=1 >> /etc/sysctl.conf
+      echo vm.min_free_kbytes=67584 >> /etc/sysctl.conf
+      echo vm.drop_caches=1 >> /etc/sysctl.conf
+      sysctl -p
+      
+      # Select the disks to use 
+      SWAP=/dev/$(lsblk|grep nvme | grep -v nvme0n1 |sort -k 4 | awk '{print $1}'| awk '(NR==1)')
+      VAULT=/dev/$(lsblk|grep nvme | grep -v nvme0n1 |sort -k 4 | awk '{print $1}'| awk '(NR==2)')
+      
+      # swap
+      # if SWAP exists
+      # we format if no format
+      if [ -b $SWAP ]; then
+      	blkid $SWAP
+      	if [ $? -ne 0 ]; then
+      		mkswap $SWAP
+      	fi
+      fi
+      
+      # if SWAP not in fstab
+      # we add it
+      grep "swap" /etc/fstab
+      if [ $? -ne 0 ]; then
+        SWAP_UUID=`blkid $SWAP| awk '{print $2}'`
+      	echo "$SWAP_UUID swap swap defaults 0 0" | tee -a /etc/fstab
+      	swapon -a
+      fi
+      
+      
+      # vault
+      # if VAULT exists
+      # we format if no format
+      if [ -b $VAULT ]; then
+      	blkid $VAULT
+      	if [ $? -ne 0 ]; then
+      		mkfs.xfs $VAULT
+      	fi
+      fi
+      
+      # if VAULT not in fstab
+      # we add it
+      grep "/opt/vault" /etc/fstab
+      if [ $? -ne 0 ]; then
+        VAULT_UUID=`blkid $VAULT| awk '{print $2}'`
+      	echo "$VAULT_UUID /opt/vault xfs defaults 0 0" | tee -a /etc/fstab
+      	mkdir -p /opt/vault
+      	mount -a
+      fi
+
+      # install Vault software
+      wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+      echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+      apt update 
+      apt install vault
+  - path: /etc/systemd/system/vault.service
+    permissions: '0750'
+    content: |
+      [Unit]
+      Description="HashiCorp Vault - A tool for managing secrets"
+      Documentation=https://www.vaultproject.io/docs/
+      Requires=network-online.target
+      After=network-online.target
+      ConditionFileNotEmpty=/opt/vault/config_vault.hcl
+      StartLimitIntervalSec=60
+      StartLimitBurst=3
+      
+      [Service]
+      User=vault
+      Group=vault
+      ProtectSystem=full
+      ProtectHome=read-only
+      PrivateTmp=yes
+      PrivateDevices=yes
+      SecureBits=keep-caps
+      AmbientCapabilities=CAP_IPC_LOCK
+      Capabilities=CAP_IPC_LOCK+ep
+      CapabilityBoundingSet=CAP_SYSLOG CAP_IPC_LOCK
+      NoNewPrivileges=yes
+      ExecStart=/usr/bin/vault server -config=/opt/vault/config_vault.hcl
+      ExecReload=/bin/kill --signal HUP $MAINPID
+      KillMode=process
+      KillSignal=SIGINT
+      Restart=on-failure
+      RestartSec=5
+      TimeoutStopSec=30
+      StartLimitInterval=60
+      StartLimitIntervalSec=60
+      StartLimitBurst=3
+      LimitNOFILE=65536
+      LimitMEMLOCK=infinity
+      
+      [Install]
+      WantedBy=multi-user.target
+  - path: /var/tmp/configure_vault.sh 
+    permissions: '0750'
+    content: |
+      #!/usr/bin/env bash
+
+      # wait until archive is available. Wait until there is internet before continue
+      until ping -c1 archive.ubuntu.com &>/dev/null; do
+        echo "waiting for networking to initialise"
+        sleep 3 
+      done 
+      
+      # copy certificate file
+      cp /var/tmp/server_certificate.pem /opt/vault/server_certificate.pem 
+      cp /var/tmp/private_certificate.pem /opt/vault/private_certificate.pem 
+
+      # copy vault configuration file
+      cp /var/tmp/config_vault.hcl /opt/vault/config_vault.hcl
+
+      # create user vault
+      useradd --system --home /etc/vault.d --shell /bin/false vault
+      
+      # change vault directory owner
+      chown -R vault:vault /opt/vault
+
+      # install Service
+      systemctl enable vault.service
+      systemctl start vault.service
+runcmd:
+  - sudo bash /var/tmp/install_software.sh 
+  - sudo bash /var/tmp/configure_vault.sh 
