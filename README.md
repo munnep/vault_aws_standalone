@@ -4,7 +4,7 @@ This repository will create a standalone Vault server latest version with public
 
 # Creating the infrastructure
 
-We create the infrastructure according to the following diagram for the
+We create the infrastructure according to the following diagram
 ![](diagram/diagram_vault_standalone.png)  
 
 # Prerequisites
@@ -37,7 +37,7 @@ cd vault_aws_standalone
 tag_prefix               = "vault1"                         # TAG prefix for names to easily find your AWS resources
 region                   = "eu-north-1"                     # Region to create the environment
 vpc_cidr                 = "10.234.0.0/16"                  # subnet mask that can be used 
-dns_hostname             = "vault1"                         # DNS hostname for the TFE
+dns_hostname             = "vault1"                         # DNS hostname for the Vault server
 dns_zonename             = "aws.munnep.com"                 # DNS zone name to be used
 certificate_email        = "patrick.munne@hashicorp.com"    # Your email address used by TLS certificate registration
 public_key               = "ssh-rsa AAAAB3Nza"              # The public key for you to connect to the server over SSH
@@ -53,7 +53,7 @@ terraform apply
 - The output should be the following
 ```
 ssh_vault_server = "ssh ubuntu@vault1.aws.munnep.com"
-tfe_ip = "13.49.110.167"
+vault_ip = "13.49.110.167"
 vault_address = "export VAULT_ADDR='https://vault1.aws.munnep.com:8200'"
 vault_dashboard = "https://vault1.aws.munnep.com:8200"
 ```
