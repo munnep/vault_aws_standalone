@@ -217,7 +217,7 @@ resource "aws_instance" "vault_server" {
     vault-private-ip       = cidrhost(cidrsubnet(var.vpc_cidr, 8, 1), 22)
     dns_zonename           = var.dns_zonename
     region                 = var.region
-    cert_file              = "${base64encode(acme_certificate.certificate.certificate_pem)}"
+    cert_file              = "${base64encode(local.certificate_full_chain)}"
     key_file               = "${base64encode(nonsensitive(acme_certificate.certificate.private_key_pem))}"
     local_ip_address       = cidrhost(cidrsubnet(var.vpc_cidr, 8, 1), 22)
   })
