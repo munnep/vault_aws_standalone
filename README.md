@@ -13,6 +13,9 @@ We will be using AWS. Make sure you have the following
 
 AWS account
 
+## License
+Vault license file
+
 ## Vault installation
 Make sure you have the Vault tool installed locally with the help of the following documentation found [here](https://developer.hashicorp.com/vault/downloads)
 
@@ -41,6 +44,7 @@ dns_hostname             = "vault1"                         # DNS hostname for t
 dns_zonename             = "aws.munnep.com"                 # DNS zone name to be used
 certificate_email        = "patrick.munne@hashicorp.com"    # Your email address used by TLS certificate registration
 public_key               = "ssh-rsa AAAAB3Nza"              # The public key for you to connect to the server over SSH
+license                  = "<license_code>                  # official license code for your Vault environment 
 ```
 - Initialize terraform
 ```
@@ -61,64 +65,15 @@ vault_dashboard = "https://vault1.aws.munnep.com:8200"
 ```
 export VAULT_ADDR='https://vault1.aws.munnep.com:8200'
 ```
-- Initialise the new Vault server
+- the Vault server is automatically initiated and unsealed. The recovery key and root token can be found on the server itself
 ```
- vault operator init
-```
-- Save the output
-``` 
-Unseal Key 1: H0aoL1jfJIiq+vtY8H1YjGxNfZk2HZoJJd2hyAXLlUpk
-Unseal Key 2: QefLAloJT3uRIXGuc6QIqmZiB/mauapUxI+aHJO3ZFyA
-Unseal Key 3: 7K40XFnpODnt/eQRrUMWJeecnbQU00u8LwCcBCSlebQr
-Unseal Key 4: v8juOGgTLV1MRzkw9aWhOCaT7DVOJ8viXwnYs2Q05dgF
-Unseal Key 5: 0LyH1Pur+PtXm0auF879ggaTwaVV2ux1dR2Ek4DxooB5
+cat /opt/vault/init_vault.txt 
+Recovery Key 1: xxxxxxxxxxxxxxxxxx
 
-Initial Root Token: hvs.oH3RBWPIeF35voZkAo3l5kty
+Initial Root Token: hvs.xxxxxxxxxxx
 
-Vault initialized with 5 key shares and a key threshold of 3. Please securely
-distribute the key shares printed above. When the Vault is re-sealed,
-restarted, or stopped, you must supply at least 3 of these keys to unseal it
-before it can start servicing requests.
+Success! Vault is initialized
 
-Vault does not store the generated root key. Without at least 3 keys to
-reconstruct the root key, Vault will remain permanently sealed!
-
-It is possible to generate new unseal keys, provided you have a quorum of
-existing unseal keys shares. See "vault operator rekey" for more information.
+Recovery key initialized with 1 key shares and a key threshold of 1. Please
+securely distribute the key shares printed above.
 ```
-- Unseal the vault environment for usage. 3 times with different unseal keys
-```
- vault operator unseal
-```
-- Now check the status
-```
-vault status
-
-Key                     Value
----                     -----
-Seal Type               shamir
-Initialized             true
-Sealed                  false
-Total Shares            5
-Threshold               3
-Version                 1.14.1
-Build Date              2023-07-21T10:15:14Z
-Storage Type            raft
-Cluster Name            vault-cluster-b133e1ab
-Cluster ID              0b44fb1b-d19a-99b5-244b-0c8439356866
-HA Enabled              true
-HA Cluster              https://vault1.aws.munnep.com:8201
-HA Mode                 active
-Active Since            2023-08-27T17:58:56.702519083Z
-Raft Committed Index    34
-Raft Applied Index      34
-```
-- Now you can login using your token
-```
-vault login
-
-Success! You are now authenticated. The token information displayed below
-is already stored in the token helper. You do NOT need to run "vault login"
-again. Future Vault requests will automatically use this token.
-```
-

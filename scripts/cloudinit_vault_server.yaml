@@ -10,6 +10,11 @@ write_files:
     owner: "root:root"
     content: !!binary |
       "${key_file}"
+  - path: "/var/tmp/license.hclic"
+    permissions: "0755"
+    owner: "root:root"
+    content: !!binary |
+      "${license}"      
   - path: /var/tmp/config_vault.hcl
     permissions: '0640'
     content: |
@@ -24,6 +29,14 @@ write_files:
         tls_cert_file = "/opt/vault/server_certificate.pem"
         tls_key_file  = "/opt/vault/private_certificate.pem"
       }
+
+      seal "awskms" {
+        region     = "${region}"
+        kms_key_id = "${kms_key_id}"
+      }
+
+      license_path = "/opt/vault/license.hclic"
+      disable_mlock = true
       
       api_addr = "https://${dns_hostname}.${dns_zonename}:8200"
       cluster_addr = "https://${dns_hostname}.${dns_zonename}:8201"
@@ -44,15 +57,6 @@ write_files:
       apt-get update
       apt-get install -y ctop net-tools sysstat jq      
 
-      # add public ssh key alvaro
-      curl -sL https://raw.githubusercontent.com/kikitux/curl-bash/master/provision/add_github_user_public_keys.sh | GITHUB_USER=kikitux bash
-      
-      # add public ssh key patrick
-      curl -sL https://raw.githubusercontent.com/kikitux/curl-bash/master/provision/add_github_user_public_keys.sh | GITHUB_USER=munnep bash
-      
-      # install netdata tool
-      curl -sL https://raw.githubusercontent.com/automodule/bash/main/install_netdata.sh | bash
-      
       # Set swappiness
       if test -f /sys/kernel/mm/transparent_hugepage/enabled; then
         echo never > /sys/kernel/mm/transparent_hugepage/enabled
@@ -118,7 +122,7 @@ write_files:
       wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
       echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
       apt update 
-      apt install vault
+      apt install vault-enterprise
   - path: /etc/systemd/system/vault.service
     permissions: '0750'
     content: |
@@ -175,7 +179,10 @@ write_files:
 
       # copy vault configuration file
       cp /var/tmp/config_vault.hcl /opt/vault/config_vault.hcl
-
+       
+      # copy license file 
+      cp /var/tmp/license.hclic /opt/vault/license.hclic
+      
       # create user vault
       useradd --system --home /etc/vault.d --shell /bin/false vault
       
@@ -185,6 +192,16 @@ write_files:
       # install Service
       systemctl enable vault.service
       systemctl start vault.service
+
+      # initilize vault
+      export VAULT_ADDR='https://${dns_hostname}.${dns_zonename}:8200'
+      echo $VAULT_ADDR > /opt/vault/vault_addr.txt
+      sleep 10
+      cd /opt/vault
+      env | grep VAULT > /opt/vault/vault_env.txt
+      if [ ! -f /opt/vault/init_vault.txt ]; then
+        vault operator init -recovery-shares=1 -recovery-threshold=1 > /opt/vault/init_vault.txt
+      fi
 runcmd:
   - sudo bash /var/tmp/install_software.sh 
   - sudo bash /var/tmp/configure_vault.sh 

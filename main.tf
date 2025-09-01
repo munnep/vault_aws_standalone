@@ -57,6 +57,14 @@ resource "aws_security_group" "default-sg" {
   }
 
   ingress {
+    description = "vault public internet API"
+    from_port   = 8201
+    to_port     = 8201
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
     description = "netdata listening"
     from_port   = 19999
     to_port     = 19999
@@ -196,9 +204,10 @@ data "aws_ami" "ubuntu" {
 }
 
 resource "aws_instance" "vault_server" {
-  ami           = data.aws_ami.ubuntu.id
-  instance_type = "t3.small"
-  key_name      = "${var.tag_prefix}-key"
+  iam_instance_profile = aws_iam_instance_profile.profile.name
+  ami                  = data.aws_ami.ubuntu.id
+  instance_type        = "t3.small"
+  key_name             = "${var.tag_prefix}-key"
 
   network_interface {
     network_interface_id = aws_network_interface.vault-priv.id
@@ -212,14 +221,16 @@ resource "aws_instance" "vault_server" {
   }
 
   user_data = templatefile("${path.module}/scripts/cloudinit_vault_server.yaml", {
-    tag_prefix             = var.tag_prefix
-    dns_hostname           = var.dns_hostname
-    vault-private-ip       = cidrhost(cidrsubnet(var.vpc_cidr, 8, 1), 22)
-    dns_zonename           = var.dns_zonename
-    region                 = var.region
-    cert_file              = "${base64encode(local.certificate_full_chain)}"
-    key_file               = "${base64encode(nonsensitive(acme_certificate.certificate.private_key_pem))}"
-    local_ip_address       = cidrhost(cidrsubnet(var.vpc_cidr, 8, 1), 22)
+    tag_prefix       = var.tag_prefix
+    dns_hostname     = var.dns_hostname
+    vault-private-ip = cidrhost(cidrsubnet(var.vpc_cidr, 8, 1), 22)
+    dns_zonename     = var.dns_zonename
+    region           = var.region
+    cert_file        = "${base64encode(local.certificate_full_chain)}"
+    key_file         = "${base64encode(nonsensitive(acme_certificate.certificate.private_key_pem))}"
+    local_ip_address = cidrhost(cidrsubnet(var.vpc_cidr, 8, 1), 22)
+    kms_key_id       = aws_kms_key.vault.key_id
+    license          = base64encode(var.license)
   })
 
   tags = {
