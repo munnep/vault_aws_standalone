@@ -13,3 +13,8 @@ output "vault_address" {
 output "vault_ip" {
   value = aws_eip.vault-eip.public_ip
 }
+
+
+output "TFC_VAULT_BACKED_AWS_RUN_ROLE_ARN" {
+  value = aws_iam_role.vault_aws_creds.arn
+}

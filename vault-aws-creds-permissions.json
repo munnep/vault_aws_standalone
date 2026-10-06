@@ -1,0 +1,23 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowEC2ForVaultTestCredentials",
+      "Effect": "Allow",
+      "Action": "ec2:*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "AllowS3BucketCreation",
+      "Effect": "Allow",
+      "Action": "s3:CreateBucket",
+      "Resource": "*"
+    },
+    {
+      "Sid": "AllowEverythingOnS3Buckets",
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": "*"
+    }
+  ]
+}

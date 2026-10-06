@@ -77,3 +77,6 @@ Success! Vault is initialized
 Recovery key initialized with 1 key shares and a key threshold of 1. Please
 securely distribute the key shares printed above.
 ```
+
+
+

@@ -39,9 +39,40 @@ resource "aws_iam_role_policy" "policy" {
           "kms:ReEncrypt*"
         ]
         Resource = "${aws_kms_key.vault.arn}"
+      },
+      {
+        Sid      = "AllowAssumeVaultAwsCreds"
+        Effect   = "Allow"
+        Action   = "sts:AssumeRole"
+        Resource = aws_iam_role.vault_aws_creds.arn
       }
     ]
   })
+}
+
+# IAM role that Vault will assume to vend AWS credentials via the AWS secrets engine
+resource "aws_iam_role" "vault_aws_creds" {
+  name = "vault-aws-creds"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowVaultEC2RoleToAssume"
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_role.role.arn
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "vault_aws_creds_policy" {
+  name   = "vault-aws-creds-permissions"
+  role   = aws_iam_role.vault_aws_creds.id
+  policy = file("${path.module}/vault-aws-creds-permissions.json")
 }
 
 resource "aws_kms_key" "vault" {

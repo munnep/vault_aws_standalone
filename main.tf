@@ -191,21 +191,47 @@ resource "aws_key_pair" "default-key" {
 }
 
 data "aws_ami" "ubuntu" {
-  most_recent = true
+  for_each = toset(["amd64", "arm64"])
+    # for_each = toset(["amd64"])
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+    values = [format("hc-base-ubuntu-2404-%s-*", each.value)]
   }
   filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
+    name   = "state"
+    values = ["available"]
   }
-  owners = ["099720109477"]
+  most_recent = true
+  owners      = ["888995627335"] # ami-prod account
 }
+
+
+data "cloudinit_config" "vault_server" {
+  gzip          = true
+  base64_encode = true
+
+  part {
+    filename     = "cloudinit_vault_server.yaml"
+    content_type = "text/cloud-config"
+    content = templatefile("${path.module}/scripts/cloudinit_vault_server.yaml", {
+      tag_prefix       = var.tag_prefix
+      dns_hostname     = var.dns_hostname
+      vault-private-ip = cidrhost(cidrsubnet(var.vpc_cidr, 8, 1), 22)
+      dns_zonename     = var.dns_zonename
+      region           = var.region
+      cert_file        = base64encode(local.certificate_full_chain)
+      key_file         = base64encode(nonsensitive(acme_certificate.certificate.private_key_pem))
+      local_ip_address = cidrhost(cidrsubnet(var.vpc_cidr, 8, 1), 22)
+      kms_key_id       = aws_kms_key.vault.key_id
+      license          = base64encode(var.license)
+    })
+  }
+}
+
 
 resource "aws_instance" "vault_server" {
   iam_instance_profile = aws_iam_instance_profile.profile.name
-  ami                  = data.aws_ami.ubuntu.id
+  ami                  = data.aws_ami.ubuntu["amd64"].id 
   instance_type        = "t3.small"
   key_name             = "${var.tag_prefix}-key"
 
@@ -220,18 +246,7 @@ resource "aws_instance" "vault_server" {
     iops        = 3000
   }
 
-  user_data = templatefile("${path.module}/scripts/cloudinit_vault_server.yaml", {
-    tag_prefix       = var.tag_prefix
-    dns_hostname     = var.dns_hostname
-    vault-private-ip = cidrhost(cidrsubnet(var.vpc_cidr, 8, 1), 22)
-    dns_zonename     = var.dns_zonename
-    region           = var.region
-    cert_file        = "${base64encode(local.certificate_full_chain)}"
-    key_file         = "${base64encode(nonsensitive(acme_certificate.certificate.private_key_pem))}"
-    local_ip_address = cidrhost(cidrsubnet(var.vpc_cidr, 8, 1), 22)
-    kms_key_id       = aws_kms_key.vault.key_id
-    license          = base64encode(var.license)
-  })
+  user_data_base64 = data.cloudinit_config.vault_server.rendered
 
   tags = {
     Name = "${var.tag_prefix}-vault"

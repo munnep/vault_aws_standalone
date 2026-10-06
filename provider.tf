@@ -8,6 +8,10 @@ terraform {
       source  = "vancluever/acme"
       version = "~> 2.5.3"
     }
+    cloudinit = {
+      source  = "hashicorp/cloudinit"
+      version = "~> 2.3"
+    }
   }
 
   required_version = ">= 1.1"
